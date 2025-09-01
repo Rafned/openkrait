@@ -1,0 +1,14 @@
+Команды и вывод:
+python src/cli.py scan-k8s
+Вывод: Обнаружена уязвимость в образе nginx:1.14..., Trivy scan for nginx:1.14: ...
+Хранение: Стандартный вывод (stdout), можно перенаправить в файл (например, > scan_results.txt).
+python src/cli.py analyze-logs --log-path /app/logs/test.log
+Вывод: Обнаружена проблема: ERROR: Database failed
+Хранение: Stdout или в data/logs/analyzed.log (добавить логирование).
+python src/cli.py store-secret --secret test-secret
+Вывод: Секрет сохранён в Vault по пути my-secret
+Хранение: Stdout, статус в Vault.
+python src/cli.py optimize-pipeline --pipeline /app/pipeline/Jenkinsfile
+Вывод: Рекомендация: включите кэширование...
+Хранение: Stdout, можно сохранить в data/optimization_report.txt.
+Рекомендация: Добавь опцию --output <file> в cli.py для сохранения выводов.

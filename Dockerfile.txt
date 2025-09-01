@@ -1,0 +1,38 @@
+# Dockerfile
+FROM python:3.8-slim AS builder
+WORKDIR /app
+
+# Копируем всё что нужно для установки
+COPY src/ src/
+COPY setup.py .
+COPY requirements.txt .
+
+# Устанавливаем зависимости и пакет
+RUN pip install -r requirements.txt
+RUN pip install .
+
+# Устанавливаем Trivy
+RUN apt-get update && apt-get install -y curl && \
+    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+# Финальный образ
+FROM python:3.8-slim
+WORKDIR /app
+
+# Копируем всё что нужно для установки пакета
+COPY src/ .
+COPY setup.py .
+COPY requirements.txt .
+
+# Устанавливаем зависимости
+RUN pip install -r requirements.txt
+RUN pip install -e .
+
+# Копируем Trivy из builder
+COPY --from=builder /usr/local/bin/trivy /usr/local/bin/trivy
+
+# Меняем пользователя
+RUN useradd -m myuser
+USER myuser
+ENV PYTHONPATH=/app
+CMD ["openkrait", "--help"]

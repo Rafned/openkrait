@@ -1,0 +1,16 @@
+# config.yaml
+limits:
+  max_secrets: 5
+
+vulnerability:
+  images:
+    - pattern: "nginx:1\\.14.*"
+      recommendation: "Update to nginx:1.20.1 or later."
+      severity: "high"
+    - pattern: "node:14.*"
+      recommendation: "Update to node:18-alpine (LTS)."
+      severity: "medium"
+
+log_analysis:
+  base_dir: "/app/logs"
+  max_file_size_mb: 10
