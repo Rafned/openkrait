@@ -1,97 +1,91 @@
-OpenKrait v1.0.0
-Автоматический часовой для вашего Kubernetes и не только.
+# OpenKrait v1.0.0
+Your automated watchman for Kubernetes and beyond.
 
-Просыпайтесь не от алертов, а от запаха кофе. OpenKrait сканирует манистусты, анализирует логи и проверяет пайплайны, пока вы спите.
+Wake up to the smell of coffee, not alerts. OpenKrait scans manifests, analyzes logs, and checks pipelines while you sleep.
 
-Как это работает
-OpenKrait построен по модульному принципу. Вот как компоненты взаимодействуют друг с другом:
+## How It Works
+OpenKrait is built on a modular architecture. Here's how the components interact:
 
+## Technical Details
+**Core Configuration** - Single-point YAML config loading. Supports nested keys via dot notation. Gracefully handles missing config files.
 
-Технические детали
-Ядро конфигурации - единая точка загрузки YAML-конфига. Поддерживает вложенные ключи через точку. Не ломается при отсутствии файла конфигурации.
+**Kubernetes Scanner** uses the official library and:
+- Auto-detects context (in-cluster or local)
+- Integrates with Trivy for image scanning
+- Checks ConfigMaps for sensitive data
+- Respects request limits (DoS protection)
 
-Сканер Kubernetes использует официальную библиотеку и:
- - Автоматически определяет контекст (in-cluster или local)
- - Интегрируется с Trivy для сканирования образов
- - Проверяет ConfigMaps на чувствительные данные
- - Соблюдает лимиты запросов (защита от DoS)
+**Log Analyzer**:
+- Sanitizes paths (path traversal protection)
+- Validates file sizes (<10 MB)
+- Detects errors without exposing log contents
 
-Анализатор логов:
- - Санитизирует пути (защита от path traversal)
- - Проверяет размер файлов (<10 MB)
- - Находит ошибки без показа самих логов 
+**Secret Manager**:
+- Requires HTTPS + SSL verification
+- Checks storage limits
+- Supports stdin input for automation
 
-Менеджер секретов:
- - Требует HTTPS + SSL verify
- - Проверяет лимиты хранения
- - Поддерживает ввод через stdin для автоматизации
+**Pipeline Optimizer**:
+- Auto-detects platform (Jenkins/GitLab/GitHub)
+- Analyzes for caching/parallel strategies
+- Provides actionable recommendations
 
-Оптимизатор пайплайнов:
- - Автодетект платформы (Jenkins/GitLab/GitHub)
- - Анализирует на наличие caching/parallel стратегий
-
-Дает конкретные рекомендации.
-
-Быстрый старт:
-  # Установка
+## Quick Start
+### Installation
   pip install openkrait
-
-  # Или через Docker
+# Or via Docker  
   docker build -t openkrait:1.0.0 .
   docker run --rm -v $(pwd):/data your-username/openkrait:1.0.0 scan-k8s
 
-
-Примеры использования
-Сканирование кластера:
+Usage Examples
+# Cluster Scanning:
   openkrait scan-k8s
-  # → Находит уязвимые образы (nginx:1.14.*)
-  # → Проверяет ConfigMaps на наличие password в ключах
-  # → Интегрируется с Trivy при наличии
- 
-Анализ логов:
+    → Finds vulnerable images (nginx:1.14.*)
+    → Checks ConfigMaps for "password" in keys
+    → Integrates with Trivy if available
+# Log Analysis:    
   openkrait analyze-logs --log-path /var/log/app.log
-  # → Обнаруживает ERROR/WARN без показа sensitive данных
-  # → Работает с файлами до 10MB
-
-Работа с секретами:
-  echo "my-secret" | openkrait store-secret-stdin  # Для скриптов
-  openkrait store-secret-cmd --secret "my-secret"  # Интерактивно
-  # → Сохраняет в Vault с проверкой лимитов
-  # → Требует HTTPS
-Оптимизация пайплайнов:
+    → Detects ERROR/WARN without exposing sensitive data
+    → Works with files up to 10MB
+# Secret Management:    
+  echo "my-secret" | openkrait store-secret-stdin  # For scripts
+  openkrait store-secret-cmd --secret "my-secret"  # Interactive
+    → Saves to Vault with limit checks
+    → Requires HTTPS
+# Pipeline Optimization:
   openkrait optimize-pipeline --pipeline Jenkinsfile
-  # → Предлагает добавить caching/stash
-  # → Определяет платформу автоматически  
+    → Suggests caching/stash improvements
+    → Auto-detects platform   
 
-Кастомизация  
-Добавьте свои правила в config.yaml:
+# Customization
+Add your own rules to config.yaml:   
+
   vulnerability:
-  images:
-    - pattern: "^my-old-image:.*"
-      recommendation: "Обновите до my-new-image:1.27"
-      severity: low
+    images:
+      - pattern: "^my-old-image:.*"
+        recommendation: "Update to my-new-image:1.27"
+        severity: low
 
   limits:
-    max_secrets: 10  # Настройте под свои needs
-Правила применяются без перезапуска системы.  
+    max_secrets: 10  # Adjust to your needs
 
+Rules apply without system restart.    
 
-Почему OpenKrait?
-  Безопасность по умолчанию - все проверки включены из коробки
-  Нулевая переконфигурация - работает сразу после установки
-  Прагматичная интеграция - адаптируется под доступные инструменты
-  Человекочитаемый вывод - конкретные рекомендации вместо сырых данных
-  Легкость расширения - новые правила через YAML
+# Why OpenKrait?
+  Security by default - All checks enabled out-of-the-box
+  Zero reconfiguration - Works immediately after installation
+  Pragmatic integration - Adapts to available tools
+  Human-readable output - Actionable recommendations instead of raw data
+  Easy extensibility - New rules via YAML
 
-Технические характеристики  
-  Тестовое покрытие: 85%
-  Поддержка: Python 3.8+
-  Зависимости: hvac, pyyaml, kubernetes, click
-  Размер Docker образа: <100MB
+# Technical Specifications
+  Test coverage: 85%
+  Support: Python 3.8+
+  Dependencies: hvac, pyyaml, kubernetes, click
+  Docker image size: <100MB
 
+For those who prefer peaceful mornings over chaotic investigations.
 
-Для тех, кто предпочитает спокойное утро хаотичному расследованию.
+OpenKrait doesn't replace full monitoring systems but excels as the first tool for morning diagnostics. When dashboards are red and coffee isn't ready yet - one command shows where to start.  
 
-OpenKrait не заменяет полноценные мониторинговые системы, но идеален как первый инструмент для утренней диагностики. Когда дашборды красные, а кофе еще не готов - одна команда покажет, с чего начать.  
-
-P.S Принимаю любую критику и предложения, по мере возможности буду  обновлять ПО . с новыми фичами.
+# P.S. I welcome all feedback and suggestions. I'll update the software with new features as time permits

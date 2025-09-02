@@ -1,9 +1,10 @@
 import logging
 import os
+import re  # Добавь этот импорт!
 import subprocess
 from pathlib import Path
 from kubernetes import client, config
-from config import Config
+from .config import Config
 
 class ConfigurationError(Exception):
     """Базовое исключение для ошибок конфигурации."""
@@ -51,10 +52,16 @@ def scan_k8s_resources():
                 image = container.image
                 if not image or not isinstance(image, str):
                     continue
-                if "nginx:1.14" in image:
-                    logging.warning(f"Detected vulnerability in image {image} in pod {pod.metadata.name}. Recommendation: update to nginx:1.20.1")
+                
+                # Проверяем уязвимые образы из конфига
+                vuln_images = Config.get("vulnerability.images", [])
+                for vuln in vuln_images:
+                    if re.match(vuln["pattern"], image):  # Используем re.match
+                        logging.warning(f"Detected vulnerable image {image} in pod {pod.metadata.name}. Recommendation: {vuln['recommendation']} | Severity: {vuln['severity']}")
+                        break  # Прерываем цикл после первого совпадения
+                
                 # Интеграция с Trivy
-                trivy_path = '/usr/local/bin/trivy'
+                trivy_path = '/usr/local/bin/trivy'  # Определяем путь здесь
                 if os.path.isfile(trivy_path) and os.access(trivy_path, os.X_OK):
                     try:
                         result = subprocess.run([trivy_path, 'image', image], capture_output=True, text=True, check=True, timeout=60)

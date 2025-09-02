@@ -3,11 +3,11 @@ from setuptools import setup, find_packages
 setup(
     name="openkrait",
     version="1.0.0",
-    package_dir={"": "src"},  
-    packages=find_packages(where="src"),  
+    package_dir={"": "src"},  # Ищем пакеты в src/
+    packages=find_packages(where="src"),  # Ищем пакеты в src/
     entry_points={
         "console_scripts": [
-            "openkrait=openkrait.cli:main" 
+            "openkrait=openkrait.cli:main"  # Правильный путь к модулю
         ]
     },
     install_requires=[

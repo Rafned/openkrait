@@ -1,7 +1,7 @@
 import logging
 import os
 import re
-from config import Config
+from .config import Config
 
 Config.load()
 

@@ -3,7 +3,7 @@ import os
 import re
 from sys import path
 from pathlib import Path
-from config import Config
+from .config import Config
 
 Config.load()
 

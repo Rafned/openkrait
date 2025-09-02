@@ -3,8 +3,8 @@ import logging
 import sys
 import os
 from unittest.mock import MagicMock
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-from secret_manager import store_secret
+#sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+from openkrait.secret_manager import store_secret
 
 @pytest.fixture
 def setup_logging(caplog):

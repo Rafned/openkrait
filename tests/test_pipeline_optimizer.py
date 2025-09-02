@@ -3,7 +3,7 @@ import logging
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-from pipeline_optimizer import optimize_pipeline
+from openkrait.pipeline_optimizer import optimize_pipeline
 
 @pytest.fixture
 def setup_logging(caplog):

@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: open_krait
+  name: openkrait
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: open_krait
+      app: openkrait
   template:
     metadata:
       labels:
-        app: open_krait
+        app: openkrait
     spec:
       containers:
-      - name: open_krait
-        image: your-username/open_krait:1.0.0
+      - name: openkrait
+        image: your-username/openkrait:1.0.0
         env:
         - name: VAULT_TOKEN
           valueFrom:

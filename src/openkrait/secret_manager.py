@@ -1,7 +1,7 @@
 import logging
 import os
 import hvac
-from config import Config
+from .config import Config
 
 Config.load()  
 max_secrets = Config.get("limits", {}).get("max_secrets", 5)

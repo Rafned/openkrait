@@ -3,8 +3,8 @@ import logging
 import sys
 import os
 from unittest.mock import MagicMock
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-from k8s_scanner import scan_k8s_resources
+#sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src/openkrait'))
+from openkrait.k8s_scanner import scan_k8s_resources
 from kubernetes import client
 
 @pytest.fixture
@@ -40,7 +40,7 @@ def test_k8s_scanner_vulnerable_image(mocker, setup_logging):
     subprocess_mock.return_value.returncode = 0
     
     scan_k8s_resources()
-    assert "Detected vulnerability in image nginx:1.14" in setup_logging.text
+    assert "Detected vulnerable image nginx:1.14" in setup_logging.text
 
 def test_k8s_scanner_trivy_not_found(mocker, setup_logging):
     """Тест: Trivy отсутствует."""

@@ -2,9 +2,9 @@ import os
 import sys
 import pytest
 from click.testing import CliRunner
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+#sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src/openkrait'))
 #from openkrait.cli import main
-from cli import main
+from openkrait.cli import main
 #sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 

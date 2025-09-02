@@ -2,11 +2,11 @@ import sys
 import logging
 import click
 import functools 
-from k8s_scanner import scan_k8s_resources
-from pipeline_optimizer import optimize_pipeline
-from log_analyzer import analyze_logs
-from secret_manager import store_secret
-from config import Config
+from .k8s_scanner import scan_k8s_resources
+from .pipeline_optimizer import optimize_pipeline
+from .log_analyzer import analyze_logs
+from .secret_manager import store_secret
+from .config import Config
 
 Config.load()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
