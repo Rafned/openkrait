@@ -1,47 +1,93 @@
+---
 name: CI
-
-on: [push, pull_request]
-
+on:
+  - push
+  - pull_request
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-    #- name: Run tests
-    #  run: pytest
-
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
   smoke-k8s:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Setup Minikube
-      run: |
-        curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-        sudo install minikube-linux-amd64 /usr/local/bin/minikube
-        minikube start --driver=docker
-    - name: Deploy vulnerable pod
-      run: |
-        # Создаем bad.yaml на лету, если забыли положить в репу
-        cat <<EOF > bad.yaml
-        apiVersion: v1
-        kind: Pod
-        metadata:
-          name: bad-pod
-        spec:
-          containers:
-          - name: nginx
-            image: nginx:1.14.2
-        EOF
-        kubectl apply -f bad.yaml
-    - name: Build and Test Scanner
-      run: |
-        docker build -t openkrait:test .
-        docker run --rm -v $HOME/.kube:/root/.kube:ro openkrait:test openkrait scan-k8s
+      - uses: actions/checkout@v4
+      - name: Setup Minikube
+        run: >
+          curl -LO
+          https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+
+          sudo install minikube-linux-amd64 /usr/local/bin/minikube
+
+          minikube start --driver=docker
+
+
+          # Ждем полного запуска кластера
+
+          minikube status
+
+          kubectl cluster-info
+      - name: Deploy vulnerable pod
+        run: |
+          # Создаем bad.yaml на лету, если забыли положить в репу
+          cat <<EOF > bad.yaml
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: bad-pod
+          spec:
+            containers:
+            - name: nginx
+              image: nginx:1.14.2
+          EOF
+          kubectl apply -f bad.yaml
+
+          # Ждем создания pod
+          sleep 10
+          kubectl get pods
+      - name: Build and Test Scanner
+        run: |+
+          docker build -t openkrait:test .
+
+          # ИСПРАВЛЕНИЕ: Монтируем kubeconfig и сертификаты Minikube в контейнер
+          # Проблема: kubeconfig существует на хосте, но не внутри контейнера
+          # Решение: монтируем директории с конфигом и сертификатами
+          docker run --rm \
+            -v $HOME/.kube:/root/.kube:ro \
+            -v $HOME/.minikube:$HOME/.minikube:ro \
+            openkrait:test openkrait scan-k8s
+            
+      - name: Verify scan results
+        run: |
+          # Проверяем, что сканер действительно находит уязвимость
+          output=$(docker run --rm \
+            -v $HOME/.kube:/root/.kube:ro \
+            -v $HOME/.minikube:$HOME/.minikube:ro \
+            openkrait:test openkrait scan-k8s 2>&1)
+
+          echo "Scan output:"
+          echo "$output"
+
+          # Ожидаем, что сканер найдет уязвимый образ nginx:1.14.2
+          if echo "$output" | grep -q "nginx:1\.14"; then
+            echo "✅ Уязвимость обнаружена (ожидаемо)"
+          else
+            echo "❌ Уязвимость не обнаружена (тест не прошел)"
+            exit 1
+          fi
+
+          # Проверяем, что есть рекомендация по обновлению
+          if echo "$output" | grep -q "Update to nginx:1.20.1"; then
+            echo "✅ Рекомендация по исправлению найдена"
+          else
+            echo "❌ Рекомендация не найдена"
+            exit 1
+          fi
