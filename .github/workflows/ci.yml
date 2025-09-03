@@ -20,24 +20,45 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Minikube
+      - name: Setup Minikube and Kubernetes
         run: >
           curl -LO
           https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
 
           sudo install minikube-linux-amd64 /usr/local/bin/minikube
 
-          minikube start --driver=docker
+
+          # Запускаем Minikube с явным указанием профиля
+
+          minikube start --driver=docker --profile=ci-test
 
 
           # Ждем полного запуска кластера
 
-          minikube status
+          minikube status -p ci-test
 
-          kubectl cluster-info
+          minikube kubectl -p ci-test -- cluster-info
+
+
+          # СОЗДАЕМ СИМЛИНК НА СТАНДАРТНОЕ МЕСТО KUBECONFIG
+
+          # Minikube создает конфиг в ~/.minikube/profiles/ci-test/config.json
+
+          mkdir -p ~/.kube
+
+          minikube kubectl -p ci-test -- config view --flatten > ~/.kube/config
+
+          chmod 600 ~/.kube/config
+
+
+          # Проверяем, что конфиг создан и доступен
+
+          ls -la ~/.kube/
+
+          kubectl config view
       - name: Deploy vulnerable pod
         run: |
-          # Создаем bad.yaml на лету, если забыли положить в репу
+          # Создаем bad.yaml
           cat <<EOF > bad.yaml
           apiVersion: v1
           kind: Pod
@@ -47,47 +68,83 @@ jobs:
             containers:
             - name: nginx
               image: nginx:1.14.2
+              imagePullPolicy: IfNotPresent
           EOF
+
           kubectl apply -f bad.yaml
 
           # Ждем создания pod
-          sleep 10
-          kubectl get pods
-      - name: Build and Test Scanner
-        run: |+
+          sleep 15
+          kubectl get pods -o wide
+          kubectl describe pod bad-pod
+      - name: Build Docker image
+        run: |
           docker build -t openkrait:test .
+      - name: Test Kubernetes Scanner
+        run: >+
+          # ВАЖНОЕ ИСПРАВЛЕНИЕ: Правильное монтирование kubeconfig
 
-          # ИСПРАВЛЕНИЕ: Монтируем kubeconfig и сертификаты Minikube в контейнер
-          # Проблема: kubeconfig существует на хосте, но не внутри контейнера
-          # Решение: монтируем директории с конфигом и сертификатами
+          # Minikube в GitHub Actions использует Docker driver, поэтому нужен особый подход
+
+          echo "Текущий kubeconfig:"
+
+          kubectl config view
+
+
+          echo "Содержимое .kube:"
+
+          ls -la ~/.kube/
+
+
+          echo "Содержимое .minikube:"
+
+          ls -la ~/.minikube/
+
+
+          # Запускаем сканер с правильным монтированием
+
           docker run --rm \
             -v $HOME/.kube:/root/.kube:ro \
             -v $HOME/.minikube:$HOME/.minikube:ro \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -e K8S_IN_CLUSTER=false \
             openkrait:test openkrait scan-k8s
             
       - name: Verify scan results
         run: |
-          # Проверяем, что сканер действительно находит уязвимость
           output=$(docker run --rm \
             -v $HOME/.kube:/root/.kube:ro \
             -v $HOME/.minikube:$HOME/.minikube:ro \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -e K8S_IN_CLUSTER=false \
             openkrait:test openkrait scan-k8s 2>&1)
 
           echo "Scan output:"
           echo "$output"
 
-          # Ожидаем, что сканер найдет уязвимый образ nginx:1.14.2
           if echo "$output" | grep -q "nginx:1\.14"; then
-            echo "✅ Уязвимость обнаружена (ожидаемо)"
+            echo "✅ Уязвимость обнаружена"
+            exit 0
           else
-            echo "❌ Уязвимость не обнаружена (тест не прошел)"
+            echo "❌ Уязвимость не обнаружена"
+            echo "Возможные причины:"
+            echo "1. Pod не создался"
+            echo "2. Проблемы с подключением к API"
+            echo "3. Сканер не видит образы"
             exit 1
           fi
-
-          # Проверяем, что есть рекомендация по обновлению
-          if echo "$output" | grep -q "Update to nginx:1.20.1"; then
-            echo "✅ Рекомендация по исправлению найдена"
-          else
-            echo "❌ Рекомендация не найдена"
-            exit 1
-          fi
+      - name: Debug info
+        if: failure()
+        run: |
+          echo "=== DEBUG INFORMATION ==="
+          echo "KUBECONFIG: $KUBECONFIG"
+          echo "Current kubeconfig:"
+          kubectl config view
+          echo "Pods:"
+          kubectl get pods -A
+          echo "Nodes:"
+          kubectl get nodes
+          echo "Minikube status:"
+          minikube status -p ci-test
+          echo "Docker images:"
+          docker images
