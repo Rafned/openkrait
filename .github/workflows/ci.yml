@@ -1,146 +1,68 @@
+---
 name: CI
-
-on: [push, pull_request]
-
+on:
+  - push
+  - pull_request
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
   smoke-k8s:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup Minikube
-      uses: medyagh/setup-minikube@master
-      with:
-        driver: docker
-        kubernetes-version: 'v1.26.0'
-        
-    - name: Verify Minikube setup
-      run: |
-        minikube status
-        kubectl cluster-info
-        kubectl get nodes
-        
-    - name: Deploy vulnerable pod
-      run: |
-        cat <<EOF > bad.yaml
-        apiVersion: v1
-        kind: Pod
-        metadata:
-          name: bad-pod
-          namespace: default
-        spec:
-          containers:
-          - name: nginx
-            image: nginx:1.14.2
-            imagePullPolicy: IfNotPresent
-        EOF
-        
-        kubectl apply -f bad.yaml --validate=false
-        sleep 20
-        kubectl get pods -o wide
-        
-    - name: Build Docker image
-      run: |
-        docker build -t openkrait:test .
-        
-    - name: Test OpenKrait without Docker
-      run: |
-        # Устанавливаем OpenKrait на хост и тестируем напрямую
-        pip install -e .
-        output=$(openkrait scan-k8s 2>&1)
-        echo "$output"
-        if echo "$output" | grep -q "nginx:1\.14"; then
-          echo "✅ Уязвимость обнаружена (без Docker)"
-        else
-          echo "❌ Уязвимость не обнаружена (без Docker)"
-          exit 1
-        fi
-        
-    - name: Test OpenKrait with ServiceAccount
-      run: |
-        # Создаем ServiceAccount с правами для сканирования
-        cat <<EOF | kubectl apply -f -
-        apiVersion: v1
-        kind: ServiceAccount
-        metadata:
-          name: openkrait-scanner
-        ---
-        apiVersion: rbac.authorization.k8s.io/v1
-        kind: ClusterRole
-        metadata:
-          name: openkrait-scanner-role
-        rules:
-        - apiGroups: [""]
-          resources: ["pods", "configmaps", "secrets"]
-          verbs: ["list", "get"]
-        ---
-        apiVersion: rbac.authorization.k8s.io/v1
-        kind: ClusterRoleBinding
-        metadata:
-          name: openkrait-scanner-binding
-        roleRef:
-          apiGroup: rbac.authorization.k8s.io
-          kind: ClusterRole
-          name: openkrait-scanner-role
-        subjects:
-        - kind: ServiceAccount
-          name: openkrait-scanner
-          namespace: default
-        EOF
-        
-        # Запускаем OpenKrait как Pod с правильным ServiceAccount
-        cat <<EOF | kubectl apply -f -
-        apiVersion: v1
-        kind: Pod
-        metadata:
-          name: openkrait-test
-        spec:
-          serviceAccountName: openkrait-scanner
-          containers:
-          - name: openkrait
-            image: openkrait:test
-            command: ["openkrait", "scan-k8s"]
-            env:
-            - name: K8S_IN_CLUSTER
-              value: "true"
-            imagePullPolicy: Never
-          restartPolicy: Never
-        EOF
-        
-        # Ждем завершения
-        sleep 30
-        kubectl logs pod/openkrait-test
-        
-        # Проверяем результаты
-        output=$(kubectl logs pod/openkrait-test 2>&1)
-        echo "$output"
-        if echo "$output" | grep -q "nginx:1\.14"; then
-          echo "✅ Уязвимость обнаружена (с ServiceAccount)"
-        else
-          echo "❌ Уязвимость не обнаружена (с ServiceAccount)"
-          exit 1
-        fi
-        
-    - name: Cleanup
-      if: always()
-      run: |
-        kubectl delete pod openkrait-test --ignore-not-found
-        kubectl delete pod bad-pod --ignore-not-found
-        kubectl delete clusterrolebinding openkrait-scanner-binding --ignore-not-found
-        kubectl delete clusterrole openkrait-scanner-role --ignore-not-found
-        kubectl delete serviceaccount openkrait-scanner --ignore-not-found
-        minikube stop
-        minikube delete
+      - uses: actions/checkout@v4
+      - name: Setup Minikube
+        uses: medyagh/setup-minikube@master
+        with:
+          driver: docker
+          kubernetes-version: v1.26.0
+      - name: Verify Minikube setup
+        run: |
+          minikube status
+          kubectl cluster-info
+          kubectl get nodes
+      - name: Deploy vulnerable pod
+        run: |
+          cat <<EOF > bad.yaml
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: bad-pod
+            namespace: default
+          spec:
+            containers:
+            - name: nginx
+              image: nginx:1.14.2
+              imagePullPolicy: IfNotPresent
+          EOF
+
+          kubectl apply -f bad.yaml --validate=false
+          sleep 20
+          kubectl get pods -o wide
+      - name: Build and test OpenKrait directly
+        run: |
+          # Устанавливаем OpenKrait на хост и тестируем напрямую
+          pip install -e .
+          output=$(openkrait scan-k8s 2>&1)
+          echo "$output"
+          if echo "$output" | grep -q "nginx:1\.14"; then
+            echo "✅ Уязвимость обнаружена (прямой запуск)"
+          else
+            echo "❌ Уязвимость не обнаружена (прямой запуск)"
+            exit 1
+          fi
+      - name: Cleanup
+        if: always()
+        run: |
+          kubectl delete pod bad-pod --ignore-not-found
+          minikube stop
+          minikube delete
