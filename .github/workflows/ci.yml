@@ -46,33 +46,45 @@ jobs:
           EOF
 
           kubectl apply -f bad.yaml --validate=false
-
-          # Ждем создания pod
-          echo "Ожидание создания pod..."
           sleep 20
-
           kubectl get pods -o wide
-          kubectl describe pod bad-pod
       - name: Build Docker image
         run: |
           docker build -t openkrait:test .
+      - name: Prepare kubeconfig for container
+        run: >
+          # СОЗДАЕМ KUBECONFIG С ПРАВИЛЬНЫМИ ПУТЯМИ ДЛЯ КОНТЕЙНЕРА
+
+          # Основная проблема: пути в kubeconfig ведут на хост, а не в контейнер
+
+          mkdir -p ~/.kube
+
+          kubectl config view --flatten > ~/.kube/config-original
+
+
+          # Заменяем абсолютные пути на относительные
+
+          sed 's|/home/runner/.minikube|/tmp/.minikube|g' ~/.kube/config-original > ~/.kube/config-container
+
+
+          # Создаем директорию для монтирования
+
+          mkdir -p /tmp/.minikube
+
+          cp -r ~/.minikube/* /tmp/.minikube/
       - name: Test Kubernetes Scanner
         run: |+
-          echo "Проверка kubeconfig:"
-          ls -la ~/.kube/
-          kubectl config view
-
-          # Запускаем сканер с правильным монтированием
+          echo "Запуск сканера OpenKrait..."
           docker run --rm \
-            -v $HOME/.kube:/root/.kube:ro \
-            -v $HOME/.minikube:$HOME/.minikube:ro \
+            -v /tmp/.minikube:/tmp/.minikube:ro \
+            -v ~/.kube/config-container:/home/myuser/.kube/config:ro \
             openkrait:test openkrait scan-k8s
             
       - name: Verify scan results
         run: |
           output=$(docker run --rm \
-            -v $HOME/.kube:/root/.kube:ro \
-            -v $HOME/.minikube:$HOME/.minikube:ro \
+            -v /tmp/.minikube:/tmp/.minikube:ro \
+            -v ~/.kube/config-container:/home/myuser/.kube/config:ro \
             openkrait:test openkrait scan-k8s 2>&1)
 
           echo "Scan output:"
@@ -82,20 +94,5 @@ jobs:
             echo "✅ Уязвимость обнаружена"
           else
             echo "❌ Уязвимость не обнаружена"
-            echo "Детальный вывод:"
-            echo "$output"
             exit 1
           fi
-      - name: Debug info if failed
-        if: failure()
-        run: |
-          echo "=== DEBUG INFORMATION ==="
-          echo "KUBECONFIG: $KUBECONFIG"
-          echo "Current kubeconfig:"
-          kubectl config view
-          echo "Pods:"
-          kubectl get pods -A
-          echo "Nodes:"
-          kubectl get nodes
-          echo "Minikube status:"
-          minikube status
