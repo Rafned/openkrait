@@ -20,50 +20,85 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Minikube and Kubernetes
+      - name: Install Docker and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker.io curl
+      - name: Setup Minikube
         run: >
-          curl -LO
-          https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+          # Устанавливаем Minikube
+
+          curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
 
           sudo install minikube-linux-amd64 /usr/local/bin/minikube
 
 
-          # Запускаем Minikube с явным указанием профиля
+          # Запускаем Docker сервис
 
-          minikube start --driver=docker --profile=ci-test
+          sudo systemctl start docker
 
-
-          # Ждем полного запуска кластера
-
-          minikube status -p ci-test
-
-          minikube kubectl -p ci-test -- cluster-info
+          sudo systemctl enable docker
 
 
-          # СОЗДАЕМ СИМЛИНК НА СТАНДАРТНОЕ МЕСТО KUBECONFIG
+          # Добавляем пользователя в группу docker
 
-          # Minikube создает конфиг в ~/.minikube/profiles/ci-test/config.json
+          sudo usermod -aG docker $USER
+
+          newgrp docker
+
+
+          # Запускаем Minikube с явным указанием driver
+
+          minikube start --driver=docker --force
+
+
+          # Ждем полного запуска
+
+          echo "Ожидание запуска Minikube..."
+
+          sleep 30
+
+
+          # Проверяем статус
+
+          minikube status
+
+
+          # КОНФИГУРИРУЕМ KUBECTL ПРАВИЛЬНО
+
+          minikube kubectl -- get nodes
+
+
+          # Экспортируем конфиг
 
           mkdir -p ~/.kube
 
-          minikube kubectl -p ci-test -- config view --flatten > ~/.kube/config
+          minikube kubectl -- config view --flatten > ~/.kube/config
 
           chmod 600 ~/.kube/config
 
 
-          # Проверяем, что конфиг создан и доступен
+          # Устанавливаем контекст
 
-          ls -la ~/.kube/
+          kubectl config use-context minikube
 
-          kubectl config view
+
+          # Проверяем подключение
+
+          kubectl cluster-info
+
+          kubectl get nodes
       - name: Deploy vulnerable pod
         run: |
-          # Создаем bad.yaml
+          # ВАЖНО: Используем minikube kubectl для гарантии
+          minikube kubectl -- create namespace test-ns
+
           cat <<EOF > bad.yaml
           apiVersion: v1
           kind: Pod
           metadata:
             name: bad-pod
+            namespace: test-ns
           spec:
             containers:
             - name: nginx
@@ -71,43 +106,27 @@ jobs:
               imagePullPolicy: IfNotPresent
           EOF
 
-          kubectl apply -f bad.yaml
+          minikube kubectl -- apply -f bad.yaml --validate=false
 
           # Ждем создания pod
-          sleep 15
-          kubectl get pods -o wide
-          kubectl describe pod bad-pod
+          echo "Ожидание создания pod..."
+          sleep 20
+
+          minikube kubectl -- get pods -n test-ns -o wide
+          minikube kubectl -- describe pod bad-pod -n test-ns
       - name: Build Docker image
         run: |
           docker build -t openkrait:test .
       - name: Test Kubernetes Scanner
-        run: >+
-          # ВАЖНОЕ ИСПРАВЛЕНИЕ: Правильное монтирование kubeconfig
-
-          # Minikube в GitHub Actions использует Docker driver, поэтому нужен особый подход
-
-          echo "Текущий kubeconfig:"
-
+        run: |+
+          echo "Проверка kubeconfig:"
+          ls -la ~/.kube/
           kubectl config view
 
-
-          echo "Содержимое .kube:"
-
-          ls -la ~/.kube/
-
-
-          echo "Содержимое .minikube:"
-
-          ls -la ~/.minikube/
-
-
           # Запускаем сканер с правильным монтированием
-
           docker run --rm \
             -v $HOME/.kube:/root/.kube:ro \
             -v $HOME/.minikube:$HOME/.minikube:ro \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -e K8S_IN_CLUSTER=false \
             openkrait:test openkrait scan-k8s
             
       - name: Verify scan results
@@ -115,8 +134,6 @@ jobs:
           output=$(docker run --rm \
             -v $HOME/.kube:/root/.kube:ro \
             -v $HOME/.minikube:$HOME/.minikube:ro \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -e K8S_IN_CLUSTER=false \
             openkrait:test openkrait scan-k8s 2>&1)
 
           echo "Scan output:"
@@ -124,27 +141,12 @@ jobs:
 
           if echo "$output" | grep -q "nginx:1\.14"; then
             echo "✅ Уязвимость обнаружена"
-            exit 0
           else
             echo "❌ Уязвимость не обнаружена"
-            echo "Возможные причины:"
-            echo "1. Pod не создался"
-            echo "2. Проблемы с подключением к API"
-            echo "3. Сканер не видит образы"
             exit 1
           fi
-      - name: Debug info
-        if: failure()
+      - name: Cleanup
+        if: always()
         run: |
-          echo "=== DEBUG INFORMATION ==="
-          echo "KUBECONFIG: $KUBECONFIG"
-          echo "Current kubeconfig:"
-          kubectl config view
-          echo "Pods:"
-          kubectl get pods -A
-          echo "Nodes:"
-          kubectl get nodes
-          echo "Minikube status:"
-          minikube status -p ci-test
-          echo "Docker images:"
-          docker images
+          minikube stop
+          minikube delete
