@@ -20,85 +20,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Docker and dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y docker.io curl
       - name: Setup Minikube
-        run: >
-          # Устанавливаем Minikube
-
-          curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-
-          sudo install minikube-linux-amd64 /usr/local/bin/minikube
-
-
-          # Запускаем Docker сервис
-
-          sudo systemctl start docker
-
-          sudo systemctl enable docker
-
-
-          # Добавляем пользователя в группу docker
-
-          sudo usermod -aG docker $USER
-
-          newgrp docker
-
-
-          # Запускаем Minikube с явным указанием driver
-
-          minikube start --driver=docker --force
-
-
-          # Ждем полного запуска
-
-          echo "Ожидание запуска Minikube..."
-
-          sleep 30
-
-
-          # Проверяем статус
-
+        uses: medyagh/setup-minikube@master
+        with:
+          driver: docker
+          kubernetes-version: v1.26.0
+      - name: Verify Minikube setup
+        run: |
           minikube status
-
-
-          # КОНФИГУРИРУЕМ KUBECTL ПРАВИЛЬНО
-
-          minikube kubectl -- get nodes
-
-
-          # Экспортируем конфиг
-
-          mkdir -p ~/.kube
-
-          minikube kubectl -- config view --flatten > ~/.kube/config
-
-          chmod 600 ~/.kube/config
-
-
-          # Устанавливаем контекст
-
-          kubectl config use-context minikube
-
-
-          # Проверяем подключение
-
           kubectl cluster-info
-
           kubectl get nodes
       - name: Deploy vulnerable pod
         run: |
-          # ВАЖНО: Используем minikube kubectl для гарантии
-          minikube kubectl -- create namespace test-ns
-
           cat <<EOF > bad.yaml
           apiVersion: v1
           kind: Pod
           metadata:
             name: bad-pod
-            namespace: test-ns
+            namespace: default
           spec:
             containers:
             - name: nginx
@@ -106,14 +45,14 @@ jobs:
               imagePullPolicy: IfNotPresent
           EOF
 
-          minikube kubectl -- apply -f bad.yaml --validate=false
+          kubectl apply -f bad.yaml --validate=false
 
           # Ждем создания pod
           echo "Ожидание создания pod..."
           sleep 20
 
-          minikube kubectl -- get pods -n test-ns -o wide
-          minikube kubectl -- describe pod bad-pod -n test-ns
+          kubectl get pods -o wide
+          kubectl describe pod bad-pod
       - name: Build Docker image
         run: |
           docker build -t openkrait:test .
@@ -143,10 +82,20 @@ jobs:
             echo "✅ Уязвимость обнаружена"
           else
             echo "❌ Уязвимость не обнаружена"
+            echo "Детальный вывод:"
+            echo "$output"
             exit 1
           fi
-      - name: Cleanup
-        if: always()
+      - name: Debug info if failed
+        if: failure()
         run: |
-          minikube stop
-          minikube delete
+          echo "=== DEBUG INFORMATION ==="
+          echo "KUBECONFIG: $KUBECONFIG"
+          echo "Current kubeconfig:"
+          kubectl config view
+          echo "Pods:"
+          kubectl get pods -A
+          echo "Nodes:"
+          kubectl get nodes
+          echo "Minikube status:"
+          minikube status
