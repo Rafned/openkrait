@@ -51,48 +51,58 @@ jobs:
       - name: Build Docker image
         run: |
           docker build -t openkrait:test .
-      - name: Prepare kubeconfig for container
-        run: >
-          # СОЗДАЕМ KUBECONFIG С ПРАВИЛЬНЫМИ ПУТЯМИ ДЛЯ КОНТЕЙНЕРА
-
-          # Основная проблема: пути в kubeconfig ведут на хост, а не в контейнер
-
-          mkdir -p ~/.kube
-
-          kubectl config view --flatten > ~/.kube/config-original
-
-
-          # Заменяем абсолютные пути на относительные
-
-          sed 's|/home/runner/.minikube|/tmp/.minikube|g' ~/.kube/config-original > ~/.kube/config-container
-
-
-          # Создаем директорию для монтирования
-
-          mkdir -p /tmp/.minikube
-
-          cp -r ~/.minikube/* /tmp/.minikube/
-      - name: Test Kubernetes Scanner
-        run: |+
-          echo "Запуск сканера OpenKrait..."
-          docker run --rm \
-            -v /tmp/.minikube:/tmp/.minikube:ro \
-            -v ~/.kube/config-container:/home/myuser/.kube/config:ro \
-            openkrait:test openkrait scan-k8s
-            
-      - name: Verify scan results
+      - name: Test OpenKrait without Docker
         run: |
-          output=$(docker run --rm \
-            -v /tmp/.minikube:/tmp/.minikube:ro \
-            -v ~/.kube/config-container:/home/myuser/.kube/config:ro \
-            openkrait:test openkrait scan-k8s 2>&1)
-
-          echo "Scan output:"
+          # Устанавливаем OpenKrait на хост и тестируем напрямую
+          pip install -e .
+          output=$(openkrait scan-k8s 2>&1)
           echo "$output"
-
           if echo "$output" | grep -q "nginx:1\.14"; then
-            echo "✅ Уязвимость обнаружена"
+            echo "✅ Уязвимость обнаружена (без Docker)"
           else
-            echo "❌ Уязвимость не обнаружена"
+            echo "❌ Уязвимость не обнаружена (без Docker)"
             exit 1
           fi
+      - name: Test OpenKrait with Docker (alternative approach)
+        run: |
+          # Альтернативный подход: запускаем OpenKrait внутри Minikube
+          minikube image load openkrait:test
+
+          # Создаем Job для запуска сканера внутри кластера
+          cat <<EOF | kubectl apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: openkrait-test
+          spec:
+            template:
+              spec:
+                containers:
+                - name: openkrait
+                  image: openkrait:test
+                  command: ["openkrait", "scan-k8s"]
+                  imagePullPolicy: Never
+                restartPolicy: Never
+            backoffLimit: 1
+          EOF
+
+          # Ждем завершения Job
+          sleep 30
+          kubectl logs job/openkrait-test
+
+          # Проверяем результаты
+          output=$(kubectl logs job/openkrait-test 2>&1)
+          echo "$output"
+          if echo "$output" | grep -q "nginx:1\.14"; then
+            echo "✅ Уязвимость обнаружена (в Docker внутри Minikube)"
+          else
+            echo "❌ Уязвимость не обнаружена (в Docker внутри Minikube)"
+            exit 1
+          fi
+      - name: Cleanup
+        if: always()
+        run: |
+          kubectl delete job openkrait-test --ignore-not-found
+          kubectl delete pod bad-pod --ignore-not-found
+          minikube stop
+          minikube delete
