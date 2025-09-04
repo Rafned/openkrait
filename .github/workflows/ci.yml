@@ -1,25 +1,35 @@
 ---
 name: CI
-on:
-  - push
-  - pull_request
+
+on: [push, pull_request]
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.9"
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
-          pip install pytest-cov
-      - name: Run Tests
-        run: pytest
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest  # Явно устанавливаем pytest
+        pip install pytest-cov  # Для coverage отчетов
+        
+    - name: Run tests with coverage
+      run: |
+        python -m pytest --cov=src --cov-report=xml tests/
+        
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
   smoke-k8s:
     runs-on: ubuntu-latest
     steps:
