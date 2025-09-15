@@ -1,6 +1,4 @@
-[![CI](https://github.com/Rafned/openkrait/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/Rafned/openkrait/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/github/Rafned/openkrait/branch/dev/graph/badge.svg?token=YODCSKVQ83)](https://codecov.io/github/Rafned/openkrait)
-🧊 OpenKrait
+🧊 OpenKrait  
 Wake up to the smell of coffee, not to PagerDuty.
 
 LICENSE MIT
@@ -18,22 +16,23 @@ LICENSE MIT
 8. [Contributing](#contributing)
 
 </details>
-<a name="what--why">
-🎯 What & Why
-OpenKrait is a modular morning-diagnosis CLI for Kubernetes, CI pipelines and logs.
+
+<a name="what--why"></a>
+## 🎯 What & Why
+
+OpenKrait is a modular morning-diagnosis CLI for Kubernetes, CI pipelines and logs.  
 It scans manifests, analyses logs and checks pipelines while you sleep, so you can wake up to actionable hints instead of red dashboards.
 
-  
-| Pain we solve | How OpenKrait helps |
-|---------------|---------------------|
-| «Where do I even start?» | One command shows the **top 3 issues** ordered by blast radius |
-| «Another CVE scanner?» | We **merge** vulns, mis-configs & pipeline anti-patterns into **one report** |
-| «Too much noise» | Opinionated **severity filter** + **size limits** (≤10 MB logs, ≤10 secrets) |
-| «YAML fatigue» | Add new rules **without touching code** – just drop them into `config.yaml` |
+| Pain we solve                | How OpenKrait helps                                                                 |
+| ---------------------------- | ----------------------------------------------------------------------------------- |
+| «Where do I even start?»     | One command shows the **top 3 issues** ordered by blast radius                      |
+| «Another CVE scanner?»       | We **merge** vulns, mis-configs & pipeline anti-patterns into **one report**        |
+| «Too much noise»             | Opinionated **severity filter** + **size limits** (≤10 MB logs, ≤10 secrets)        |
+| «YAML fatigue»               | Add new rules **without touching code** – just drop them into `config.yaml`         |
 
-<a name="how-it-works">
-🧠 How it works
-  
+<a name="how-it-works"></a>
+## 🧠 How it works
+
 ```mermaid
 graph TD
     CLI[CLI Interface] --> CFG[Config Core]
@@ -61,7 +60,7 @@ graph TD
     class K8S,LOG,PL,SEC scan
     class API,TRIVY,VAULT stor
 ```    
----
+
 
 | Component              | Super-powers                                                                             |
 | ---------------------- | ---------------------------------------------------------------------------------------- |
@@ -71,7 +70,7 @@ graph TD
 | **Secret Manager**     | HTTPS-only, SSL-verify on, accepts **stdin** for automation, honours Vault quotas        |
 | **Pipeline Optimizer** | Auto-detects Jenkins / GitLab / GitHub, suggests caching & parallelisation tweaks        |
 
-<a name="quick-start">
+<a name="quick-start"> </a>
 🚀 Quick start
   
 | pip                     | Docker                                                                 |
@@ -82,7 +81,7 @@ After install:
 
 openkrait --help
 
-<a name="usage-examples">
+<a name="usage-examples"> </a>
 💡 Usage examples
   
 | Goal               | Command                                              | What you get                                                 |
@@ -92,7 +91,7 @@ openkrait --help
 | **Secret hygiene** | `echo "my-secret" \| openkrait store-secret-stdin`   | Stores in Vault, checks quota, enforces HTTPS                |
 | **Faster CI**      | `openkrait optimize-pipeline --pipeline Jenkinsfile` | Platform-specific hints: `stash`, `cache`, `parallel` blocks |
 
-<a name="customising-rules">
+<a name="customising-rules"> </a>
 ⚙️ Customising rules
 Drop a `config.yaml` next to the binary – no restart required.
 
@@ -115,7 +114,7 @@ limits:
 | `*.severity`                     | low｜medium｜high | Opinionated ordering         |
 
 
-<a name="tech-specs">
+<a name="tech-specs"> </a>
 📊 Tech specs
   
 | Metric            | Value                                                        |
@@ -128,7 +127,7 @@ limits:
 | **Repo**          | [github.com/Rafned/openkrait](https://github.com/you/openkrait) |
 
   
-<a name="contributing"></a>
+<a name="contributing"> </a>
 🤝 Contributing  
 PRs are welcome!  
 Please run `make test lint` before push – CI will do the rest.
