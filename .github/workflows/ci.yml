@@ -41,7 +41,7 @@ jobs:
         uses: medyagh/setup-minikube@master
         with:
           driver: docker
-          kubernetes-version: v1.26.0
+          kubernetes-version: v1.28.0
       - name: Verify Minikube setup
         run: |
           minikube status
