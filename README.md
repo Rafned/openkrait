@@ -1,91 +1,138 @@
-# OpenKrait v1.0.0
-Your automated watchman for Kubernetes and beyond.
+[![CI](https://github.com/Rafned/openkrait/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/Rafned/openkrait/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/github/Rafned/openkrait/branch/dev/graph/badge.svg?token=YODCSKVQ83)](https://codecov.io/github/Rafned/openkrait)
+🧊 OpenKrait
+Wake up to the smell of coffee, not to PagerDuty.
 
-Wake up to the smell of coffee, not alerts. OpenKrait scans manifests, analyzes logs, and checks pipelines while you sleep.
+LICENSE MIT
 
-## How It Works
-OpenKrait is built on a modular architecture. Here's how the components interact:
+<details open>
+<summary>📑 Table of Contents</summary>
+What & Why
+How it works
+Quick start
+Usage examples
+Customising rules
+Tech specs
+Roadmap
+Contributing
+</details>
+<a name="what--why">
+🎯 What & Why
+OpenKrait is a modular morning-diagnosis CLI for Kubernetes, CI pipelines and logs.
+It scans manifests, analyses logs and checks pipelines while you sleep, so you can wake up to actionable hints instead of red dashboards.
 
-## Technical Details
-**Core Configuration** - Single-point YAML config loading. Supports nested keys via dot notation. Gracefully handles missing config files.
+  
+| Pain we solve | How OpenKrait helps |
+|---------------|---------------------|
+| «Where do I even start?» | One command shows the **top 3 issues** ordered by blast radius |
+| «Another CVE scanner?» | We **merge** vulns, mis-configs & pipeline anti-patterns into **one report** |
+| «Too much noise» | Opinionated **severity filter** + **size limits** (≤10 MB logs, ≤10 secrets) |
+| «YAML fatigue» | Add new rules **without touching code** – just drop them into `config.yaml` |
 
-**Kubernetes Scanner** uses the official library and:
-- Auto-detects context (in-cluster or local)
-- Integrates with Trivy for image scanning
-- Checks ConfigMaps for sensitive data
-- Respects request limits (DoS protection)
+<a name="how-it-works">
+🧠 How it works
+  
+```mermaid
+graph TD
+    CLI[CLI Interface] --> CFG[Config Core]
+    CLI --> K8S[K8s Scanner]
+    CLI --> LOG[Log Analyzer]
+    CLI --> PL[Pipeline Optimizer]
+    CLI --> SEC[Secret Manager]
 
-**Log Analyzer**:
-- Sanitizes paths (path traversal protection)
-- Validates file sizes (<10 MB)
-- Detects errors without exposing log contents
+    CFG --> K8S
+    CFG --> LOG
+    CFG --> PL
+    CFG --> SEC
 
-**Secret Manager**:
-- Requires HTTPS + SSL verification
-- Checks storage limits
-- Supports stdin input for automation
+    K8S --> API[Kubernetes API]
+    K8S --> TRIVY[Trivy Scanner]
 
-**Pipeline Optimizer**:
-- Auto-detects platform (Jenkins/GitLab/GitHub)
-- Analyzes for caching/parallel strategies
-- Provides actionable recommendations
+    SEC --> VAULT[HashiCorp Vault]
 
-## Quick Start
-### Installation
-  pip install openkrait
-# Or via Docker  
-  docker build -t openkrait:1.0.0 .
-  docker run --rm -v $(pwd):/data your-username/openkrait:1.0.0 scan-k8s
+    classDef core fill:#e1f5fe
+    classDef scan fill:#c8e6c9
+    classDef stor fill:#fff9c4
+    classDef cli  fill:#f3e5f5
 
-Usage Examples
-# Cluster Scanning:
-  openkrait scan-k8s
-    → Finds vulnerable images (nginx:1.14.*)
-    → Checks ConfigMaps for "password" in keys
-    → Integrates with Trivy if available
-# Log Analysis:    
-  openkrait analyze-logs --log-path /var/log/app.log
-    → Detects ERROR/WARN without exposing sensitive data
-    → Works with files up to 10MB
-# Secret Management:    
-  echo "my-secret" | openkrait store-secret-stdin  # For scripts
-  openkrait store-secret-cmd --secret "my-secret"  # Interactive
-    → Saves to Vault with limit checks
-    → Requires HTTPS
-# Pipeline Optimization:
-  openkrait optimize-pipeline --pipeline Jenkinsfile
-    → Suggests caching/stash improvements
-    → Auto-detects platform   
+    class CLI,CFG core
+    class K8S,LOG,PL,SEC scan
+    class API,TRIVY,VAULT stor
+```    
+---
 
-# Customization
-Add your own rules to config.yaml:   
+| Component              | Super-powers                                                                             |
+| ---------------------- | ---------------------------------------------------------------------------------------- |
+| **Config Core**        | Hierarchical YAML, dot-notation, hot-reload, fail-safe defaults                          |
+| **K8s Scanner**        | Auto-detects in-cluster / local kubeconfig, respects API rate-limits, couples with Trivy |
+| **Log Analyzer**       | Sanitises paths, refuses files >10 MB, surfaces **error counts** without leaking data    |
+| **Secret Manager**     | HTTPS-only, SSL-verify on, accepts **stdin** for automation, honours Vault quotas        |
+| **Pipeline Optimizer** | Auto-detects Jenkins / GitLab / GitHub, suggests caching & parallelisation tweaks        |
 
-  vulnerability:
-    images:
-      - pattern: "^my-old-image:.*"
-        recommendation: "Update to my-new-image:1.27"
-        severity: low
+<a name="quick-start">
+🚀 Quick start
+  
+| pip                     | Docker                                                                 |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `pip install openkrait` | `docker run --rm -v $PWD:/data your-username/openkrait:1.0.0 scan-k8s` |
 
-  limits:
-    max_secrets: 10  # Adjust to your needs
+After install:
 
-Rules apply without system restart.    
+openkrait --help
 
-# Why OpenKrait?
-  Security by default - All checks enabled out-of-the-box
-  Zero reconfiguration - Works immediately after installation
-  Pragmatic integration - Adapts to available tools
-  Human-readable output - Actionable recommendations instead of raw data
-  Easy extensibility - New rules via YAML
+<a name="usage-examples">
+💡 Usage examples
+  
+| Goal               | Command                                              | What you get                                                 |
+| ------------------ | ---------------------------------------------------- | ------------------------------------------------------------ |
+| **Cluster health** | `openkrait scan-k8s`                                 | List of vulnerable images + ConfigMaps with suspicious keys  |
+| **Log forensics**  | `openkrait analyze-logs --log-path /var/log/app.log` | ERROR/WARN count, top offending modules, **no raw lines**    |
+| **Secret hygiene** | `echo "my-secret" \| openkrait store-secret-stdin`   | Stores in Vault, checks quota, enforces HTTPS                |
+| **Faster CI**      | `openkrait optimize-pipeline --pipeline Jenkinsfile` | Platform-specific hints: `stash`, `cache`, `parallel` blocks |
 
-# Technical Specifications
-  Test coverage: 85%
-  Support: Python 3.8+
-  Dependencies: hvac, pyyaml, kubernetes, click
-  Docker image size: <100MB
+<a name="customising-rules">
+⚙️ Customising rules
+Drop a `config.yaml` next to the binary – no restart required.
 
-For those who prefer peaceful mornings over chaotic investigations.
+```yaml
+vulnerability:
+  images:
+    - pattern: "^my-old-image:.*"
+      recommendation: "Bump to my-new-image:1.27"
+      severity: low
 
-OpenKrait doesn't replace full monitoring systems but excels as the first tool for morning diagnostics. When dashboards are red and coffee isn't ready yet - one command shows where to start.  
+limits:
+  max_secrets: 10
+  max_log_size_mb: 10
+```
 
-# P.S. I welcome all feedback and suggestions. I'll update the software with new features as time permits
+| Key                              | Type            | Description                    |
+| -------------------------------- | --------------- | ------------------------------ |
+| `vulnerability.images[].pattern` | regex           | Image name to match            |
+| `*.recommendation`               | string          | Human-fix hint shown in report |
+| `*.severity`                     | low｜medium｜high | Opinionated ordering         |
+
+
+<a name="tech-specs">
+📊 Tech specs
+  
+| Metric            | Value                                                        |
+| ----------------- | ------------------------------------------------------------ |
+| **Test coverage** | 75 %                                                         |
+| **Python**        | 3.8+                                                         |
+| **Core deps**     | `click`, `kubernetes`, `pyyaml`, `hvac`                      |
+| **Docker image**  | < 100 MB (distroless)                                        |
+| **License**       | MIT                                                          |
+| **Repo**          | [github.com/Rafned/openkrait](https://github.com/you/openkrait) |
+
+  
+<a name="contributing"></a>
+🤝 Contributing  
+PRs are welcome!  
+Please run `make test lint` before push – CI will do the rest.
+
+<div align="center">
+
+Star ⭐ if OpenKrait saved your morning coffee!
+
+</div>
