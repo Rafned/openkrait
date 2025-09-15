@@ -7,14 +7,16 @@ LICENSE MIT
 
 <details open>
 <summary>📑 Table of Contents</summary>
-What & Why
-How it works
-Quick start
-Usage examples
-Customising rules
-Tech specs
-Roadmap
-Contributing
+
+1. [What & Why](#what--why)  
+2. [How it works](#how-it-works)  
+3. [Quick start](#quick-start)  
+4. [Usage examples](#usage-examples)  
+5. [Customising rules](#customising-rules)  
+6. [Tech specs](#tech-specs)  
+7. [Roadmap](#roadmap)  
+8. [Contributing](#contributing)
+
 </details>
 <a name="what--why">
 🎯 What & Why
