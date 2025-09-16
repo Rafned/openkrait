@@ -1,24 +1,30 @@
-🧊 OpenKrait  
-Wake up to the smell of coffee, not to PagerDuty.
+[![CI](https://github.com/Rafned/openkrait/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/Rafned/openkrait/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/github/Rafned/openkrait/branch/dev/graph/badge.svg?token=YODCSKVQ83)](https://codecov.io/github/Rafned/openkrait)
 
-LICENSE MIT
+
+# 🧊 OpenKrait  
+ Wake up to the smell of coffee, not to PagerDuty.
+
+LICENSE: MIT
 
 <details open>
 <summary>📑 Table of Contents</summary>
 
 1. [What & Why](#what--why)  
-2. [How it works](#how-it-works)  
-3. [Quick start](#quick-start)  
-4. [Usage examples](#usage-examples)  
-5. [Customising rules](#customising-rules)  
-6. [Tech specs](#tech-specs)  
-7. [Roadmap](#roadmap)  
-8. [Contributing](#contributing)
+2. [How it works](#how-it-works)
+3. [Deep Dive: How Kubernetes Scanning Works](#deep-dive)
+4. [Security First Design](#security-first-design)
+5. [Quick start](#quick-start)  
+6. [Usage examples](#usage-examples)  
+7. [Customising rules](#customising-rules)  
+8. [Tech specs](#tech-specs)  
+9. [Roadmap](#roadmap)  
+10. [Contributing](#contributing)
 
 </details>
 
 <a name="what--why"></a>
-## 🎯 What & Why
+## 🎯 ***What & Why***
 
 OpenKrait is a modular morning-diagnosis CLI for Kubernetes, CI pipelines and logs.  
 It scans manifests, analyses logs and checks pipelines while you sleep, so you can wake up to actionable hints instead of red dashboards.
@@ -31,7 +37,7 @@ It scans manifests, analyses logs and checks pipelines while you sleep, so you c
 | «YAML fatigue»               | Add new rules **without touching code** – just drop them into `config.yaml`         |
 
 <a name="how-it-works"></a>
-## 🧠 How it works
+## 🧠 ***How it works***
 
 ```mermaid
 graph TD
@@ -70,19 +76,81 @@ graph TD
 | **Secret Manager**     | HTTPS-only, SSL-verify on, accepts **stdin** for automation, honours Vault quotas        |
 | **Pipeline Optimizer** | Auto-detects Jenkins / GitLab / GitHub, suggests caching & parallelisation tweaks        |
 
-<a name="quick-start"> </a>
-🚀 Quick start
+<a name="deep-dive"></a>
+## 🔍 ***Deep Dive: How Kubernetes Scanning Works***
+```mermaid
+sequenceDiagram
+    actor User as DevOps Engineer
+    participant CLI as OpenKrait CLI
+    participant Scanner as K8s Scanner
+    participant K8S as Kubernetes API
+    participant Trivy as Trivy
+    participant Config as Config Manager
+
+    User->>CLI: openkrait scan-k8s
+    CLI->>Scanner: scan_k8s_resources()
+    
+    Scanner->>Config: Get vulnerability patterns
+    Config-->>Scanner: Return patterns from config.yaml
+    
+    Scanner->>K8S: list_pod_for_all_namespaces()
+    K8S-->>Scanner: Pod list
+    
+    loop For each Pod
+        Scanner->>Scanner: Check image vs config patterns
+        Note right of Scanner: Local regex matching
+        
+        Scanner->>Trivy: trivy image <image_name>
+        Trivy-->>Scanner: Vulnerability report
+        
+        Scanner->>Scanner: Generate security warnings
+    end
+    
+    Scanner->>CLI: Return scan results
+    CLI->>User: Display human-readable report
+```
+<a name="security-disign"></a>
+## 🛡️ ***Security First Design***
+
+```mermaid
+flowchart LR
+    A[Input Data] --> B{Multi-Level Validation}
+    
+    B --> C[Path Validation]
+    B --> D[Size Check]
+    B --> E[Protocol Check<br>HTTPS only]
+    B --> F[Rate Limiting Check]
+    
+    C --> G[Secure Processing]
+    D --> G
+    E --> G
+    F --> G
+    
+    G --> H[Secure Output<br>No Sensitive Data]
+```    
+
+| Threat | Protection in OpenKrait |
+|--------|-------------------------|
+| **Secret leakage** | Only log the detection event, never the actual data |
+| **Path Traversal** | Sanitisation of all paths (`safe_path()`), jail to `/app/logs` |
+| **MITM attacks** | Enforced HTTPS for all external connections (Vault, Loki) |
+| **DoS via large files** | Log size limit (10 MB) and request rate-limiting to Kubernetes API |
+| **Configs in code** | Configuration via environment variables and a separate `config.yaml` file |
+
+
+<a name="quick-start"></a>
+## 🚀 ***Quick start***
   
 | pip                     | Docker                                                                 |
 | ----------------------- | ---------------------------------------------------------------------- |
 | `pip install openkrait` | `docker run --rm -v $PWD:/data your-username/openkrait:1.0.0 scan-k8s` |
 
-After install:
+After install: <!-- Улучшен отступ для лучшей читаемости -->
 
 openkrait --help
 
-<a name="usage-examples"> </a>
-💡 Usage examples
+<a name="usage-examples"></a>
+## 💡 ***Usage examples***
   
 | Goal               | Command                                              | What you get                                                 |
 | ------------------ | ---------------------------------------------------- | ------------------------------------------------------------ |
@@ -91,8 +159,8 @@ openkrait --help
 | **Secret hygiene** | `echo "my-secret" \| openkrait store-secret-stdin`   | Stores in Vault, checks quota, enforces HTTPS                |
 | **Faster CI**      | `openkrait optimize-pipeline --pipeline Jenkinsfile` | Platform-specific hints: `stash`, `cache`, `parallel` blocks |
 
-<a name="customising-rules"> </a>
-⚙️ Customising rules
+<a name="customising-rules"></a>
+ ## ⚙️ ***Customising rules***
 Drop a `config.yaml` next to the binary – no restart required.
 
 ```yaml
@@ -114,26 +182,26 @@ limits:
 | `*.severity`                     | low｜medium｜high | Opinionated ordering         |
 
 
-<a name="tech-specs"> </a>
-📊 Tech specs
+<a name="tech-specs"></a>
+## 📊 ***Tech specs***
   
 | Metric            | Value                                                        |
 | ----------------- | ------------------------------------------------------------ |
-| **Test coverage** | 75 %                                                         |
+| **Test coverage** | 75%                                                         |
 | **Python**        | 3.8+                                                         |
 | **Core deps**     | `click`, `kubernetes`, `pyyaml`, `hvac`                      |
 | **Docker image**  | < 100 MB (distroless)                                        |
 | **License**       | MIT                                                          |
-| **Repo**          | [github.com/Rafned/openkrait](https://github.com/you/openkrait) |
+| **Repo**          | [https://github.com/Rafned/openkrait]|
 
   
-<a name="contributing"> </a>
-🤝 Contributing  
+<a name="contributing"></a>
+## 🤝 ***Contributing***  
 PRs are welcome!  
 Please run `make test lint` before push – CI will do the rest.
 
 <div align="center">
 
-Star ⭐ if OpenKrait saved your morning coffee!
+# Star ⭐ if OpenKrait saved your morning coffee!
 
 </div>
