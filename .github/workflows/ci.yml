@@ -1,3 +1,4 @@
+---
 name: CI
 
 on: [push, pull_request]
@@ -7,41 +8,78 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.9'
+        
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-    #- name: Run tests
-    #  run: pytest
-
+        pip install pytest pytest-cov pytest-mock  # Добавляем pytest-mock
+        
+    - name: Install openkrait in development mode
+      run: |
+        pip install -e .
+        
+    - name: Run tests
+      run: |
+        python -m pytest tests/ -v --cov=src --cov-report=xml
+        
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        token: ${{ secrets.CODECOV_TOKEN }}
   smoke-k8s:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Setup Minikube
-      run: |
-        curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-        sudo install minikube-linux-amd64 /usr/local/bin/minikube
-        minikube start --driver=docker
-    - name: Deploy vulnerable pod
-      run: |
-        # Создаем bad.yaml на лету, если забыли положить в репу
-        cat <<EOF > bad.yaml
-        apiVersion: v1
-        kind: Pod
-        metadata:
-          name: bad-pod
-        spec:
-          containers:
-          - name: nginx
-            image: nginx:1.14.2
-        EOF
-        kubectl apply -f bad.yaml
-    - name: Build and Test Scanner
-      run: |
-        docker build -t openkrait:test .
-        docker run --rm -v $HOME/.kube:/root/.kube:ro openkrait:test openkrait scan-k8s
+      - uses: actions/checkout@v4
+      - name: Setup Minikube
+        uses: medyagh/setup-minikube@master
+        with:
+          driver: docker
+          kubernetes-version: v1.28.0
+      - name: Verify Minikube setup
+        run: |
+          minikube status
+          kubectl cluster-info
+          kubectl get nodes
+      - name: Deploy vulnerable pod
+        run: |
+          cat <<EOF > bad.yaml
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: bad-pod
+            namespace: default
+          spec:
+            containers:
+            - name: nginx
+              image: nginx:1.14.2
+              imagePullPolicy: IfNotPresent
+          EOF
+
+          kubectl apply -f bad.yaml --validate=false
+          sleep 20
+          kubectl get pods -o wide
+      - name: Build and test OpenKrait directly
+        run: |
+          # Устанавливаем OpenKrait на хост и тестируем напрямую
+          pip install -e .
+          output=$(openkrait scan-k8s 2>&1)
+          echo "$output"
+          if echo "$output" | grep -q "nginx:1\.14"; then
+            echo "✅ Уязвимость обнаружена (прямой запуск)"
+          else
+            echo "❌ Уязвимость не обнаружена (прямой запуск)"
+            exit 1
+          fi
+      - name: Cleanup
+        if: always()
+        run: |
+          kubectl delete pod bad-pod --ignore-not-found
+          minikube stop
+          minikube delete
